@@ -1,12 +1,15 @@
 package Tester.Models;
 
+/**
+ * A class representing a simple arithmetic equation with 2 floating-point operands and one operator.
+ */
 public class Equation {
 
-    enum Operator {ADDITION , SUBTRACTION}
+    public enum Operator {ADDITION, SUBTRACTION} // ADDITION(+), SUBTRACTION(-)
 
-    private final Double firstValue;
-    private final Double secondValue;
-    private final Operator operator;
+    private final Double firstValue;             // First operand
+    private final Double secondValue;            // Second operand
+    private final Operator operator;             // Operator being used
 
     public Equation(Double smallestPossibleValue, Double largestPossibleValue, Operator operator) {
         double rangeMultiplier = (largestPossibleValue - smallestPossibleValue + 1) + smallestPossibleValue;

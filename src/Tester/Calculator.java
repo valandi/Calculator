@@ -1,6 +1,6 @@
 package Tester;
 
-public class Calculator{
+public class Calculator {
 
     private String name;
     private double errorConstant;

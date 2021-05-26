@@ -8,30 +8,32 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Manages all tests being performed on calculators.
- *
+ * <p>
  * Generates the test Threads.
  * Executes the test Threads.
  * Determines results and outputs results to console.
  */
 public class CalculatorTester {
 
-    private final Calculator[] calculators; // All calculators being tested
-    private final Equation[] equations;     // All equations to use in tests
-    private final Map<String, Double> calculatorSuccessRates; // Map of calculator name to success rate
+    private final int numberOfTests;                                // Total number of tests to run per calculator
+    private final Calculator[] calculators;                         // All calculators being tested
+    private final Equation[] equations;                             // All equations to use in tests
+    private final Map<String, Double> calculatorSuccessRates;       // Map of calculator name to success rate
     private final List<CalculatorTestThread> calculatorRunnables;   // List of CalculatorTest threads
-    private final int numberOfTests;
+    private final CountDownLatch countDownLatch;                    // Used to determine when all tasks are finished
 
     public CalculatorTester(int numberOfTests, double operandMinValue, double operandMaxValue, Calculator... calculators) {
         this.numberOfTests = numberOfTests;
         this.calculators = calculators;
         this.equations = new Equation[numberOfTests];
-        for(int i = 0; i < numberOfTests; i++) {
+        for (int i = 0; i < numberOfTests; i++) {
             this.equations[i] = new Equation(
                     operandMinValue,
                     operandMinValue,
@@ -42,38 +44,41 @@ public class CalculatorTester {
         this.calculatorSuccessRates = new LinkedHashMap<>();
 
         this.calculatorRunnables = Collections.synchronizedList(new ArrayList<>());
+        this.countDownLatch = new CountDownLatch(calculators.length);
     }
 
+    /**
+     * Exposed method that Runner invokes to execute calculator tests.
+     */
     public void runCalculatorTests() {
         createCalculatorTests();
         executeTests();
         determineAndPrintResult();
     }
 
-    private void executeTests() {
-        // Executor Service
-        final ExecutorService executorService = Executors.newCachedThreadPool();
-        for(CalculatorTestThread test : calculatorRunnables) {
-            executorService.execute(test);
-        }
-        executorService.shutdown();
-
-        try {
-            executorService.awaitTermination(800, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            System.out.println("There was an error waiting for tasks to terminate :(");
-            System.out.println(e.toString());
-        }
+    /**
+     * Creates the CalculatorTest threads and adds them to list.
+     */
+    private void createCalculatorTests() {
+        Arrays.stream(calculators).forEach(calculator ->
+                calculatorRunnables.add(new CalculatorTestThread(calculator, equations, numberOfTests, countDownLatch))
+        );
     }
 
     /**
-     * Creates the CalculatorTest threads and adds them to calculators
+     * Call run on each CalculatorTestThread in CalculatorRunnables
+     * Wait for the CountDownLatch to reach zero, blocking determineAndPrintResult() until all tasks are complete.
      */
-    private void createCalculatorTests() {
-        Arrays.stream(calculators)
-                .forEach(calculator ->
-                        calculatorRunnables.add(new CalculatorTestThread(calculator, equations, numberOfTests))
-                );
+    private void executeTests() {
+
+        calculatorRunnables.forEach(CalculatorTestThread::run); // Run each of the test threads
+
+        try {
+            countDownLatch.await(); // Wait for the CountdownLatch to hit 0
+        } catch (InterruptedException e) {
+            System.out.println("There was an issue waiting for each task to finish :(");
+            System.out.println(e.toString());
+        }
     }
 
     /**
@@ -87,7 +92,12 @@ public class CalculatorTester {
         double maxSuccess = 0.0;
         double currSuccess;
 
-        for(CalculatorTestThread calculatorTestThread : calculatorRunnables) {
+        /**
+         * Keep track of the maxSuccess rate as we go along.
+         * If we find a calculatorTestThread that reports a higher success rate than maxSuccess
+         * Set maxSuccess to the current success rate and calculatorMostSuccessName as the current calculator name
+         */
+        for (CalculatorTestThread calculatorTestThread : calculatorRunnables) {
             currSuccess = calculatorTestThread.getSuccessRate();
             currName = calculatorTestThread.getCalculator().getName();
 
@@ -106,8 +116,6 @@ public class CalculatorTester {
         calculatorSuccessRates.keySet().stream()
                 .map(calculatorName -> calculatorName + " Success rate: " + calculatorSuccessRates.get(calculatorName))
                 .forEach(System.out::println);
-
         System.out.println(calculatorMostSuccessName + " is better");
     }
-
 }
